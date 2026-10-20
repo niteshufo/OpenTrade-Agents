@@ -59,3 +59,20 @@ def list_agents(db: Session = Depends(get_db)):
         select(Agent).order_by(Agent.id)
     ).all()
     return agents
+
+
+
+@router.get("/{agent_id}", response_model=AgentResponse)
+def get_agent(
+    agent_id: int,
+    db: Session = Depends(get_db),
+):
+    agent = db.get(Agent, agent_id)
+
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found",
+        )
+
+    return agent

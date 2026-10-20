@@ -47,3 +47,29 @@ def test_list_agents(client):
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+
+def test_get_agent_by_id(client):
+    created = client.post(
+        "/api/v1/agents/register",
+        json={
+            "name": "detail-test-agent",
+            "description": "Detail test",
+            "strategy_type": "momentum",
+        },
+    )
+    assert created.status_code == 201
+
+    agent_id = created.json()["id"]
+    response = client.get(f"/api/v1/agents/{agent_id}")
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "detail-test-agent"
+
+
+def test_get_missing_agent_returns_404(client):
+    response = client.get("/api/v1/agents/999999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Agent not found"
