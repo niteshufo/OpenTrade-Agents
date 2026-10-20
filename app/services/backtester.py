@@ -10,11 +10,11 @@ def run_backtest(
     fast_window: int = 10,
     slow_window: int = 30,
 ) -> dict:
-    """Backtest a long-only moving-average strategy.
+    """Run a long-only moving-average crossover backtest.
 
-    Signals are generated at candle close and executed at the next
-    candle close to avoid using the same candle's future return.
-    One position at a time; no leverage.
+    Signals formed at candle close are executed at the next candle close.
+    One position at a time; no leverage or short selling.
+    Open positions are marked to market at the final candle.
     """
     if initial_balance <= 0:
         raise ValueError("initial_balance must be positive.")
@@ -32,53 +32,70 @@ def run_backtest(
     cash = float(initial_balance)
     quantity = 0.0
     entry_price = None
+    entry_fee = 0.0
+    realized_pnl = 0.0
     trades = []
     equity_values = []
 
-    # Signal at candle i is executed at candle i+1 close.
     for i in range(len(data)):
         price = float(close.iloc[i])
 
+        # Execute the previous candle's signal at this candle's close.
         if i > 0:
             signal = data["signal"].iloc[i - 1]
 
             if signal == "BUY" and quantity == 0:
                 quantity = cash / (price * (1 + fee_rate))
                 cost = quantity * price
-                fee = cost * fee_rate
-                cash -= cost + fee
+                entry_fee = cost * fee_rate
+                cash -= cost + entry_fee
                 entry_price = price
+
                 trades.append({
                     "side": "BUY",
                     "price": price,
                     "quantity": quantity,
-                    "fee": fee,
+                    "fee": entry_fee,
                 })
 
             elif signal == "SELL" and quantity > 0:
                 proceeds = quantity * price
-                fee = proceeds * fee_rate
-                cash += proceeds - fee
+                exit_fee = proceeds * fee_rate
+                trade_pnl = (
+                    (price - entry_price) * quantity
+                    - entry_fee
+                    - exit_fee
+                )
+                cash += proceeds - exit_fee
+                realized_pnl += trade_pnl
+
                 trades.append({
                     "side": "SELL",
                     "price": price,
                     "quantity": quantity,
-                    "fee": fee,
+                    "fee": exit_fee,
                     "entry_price": entry_price,
-                    "net_pnl": (price - entry_price) * quantity
-                    - fee
-                    - entry_price * quantity * fee_rate,
+                    "net_pnl": trade_pnl,
                 })
+
                 quantity = 0.0
                 entry_price = None
+                entry_fee = 0.0
 
         equity_values.append(cash + quantity * price)
 
     equity = pd.Series(equity_values, dtype=float)
+    final_price = float(close.iloc[-1])
     final_equity = float(equity.iloc[-1])
+    unrealized_pnl = 0.0
+
+    if quantity > 0:
+        unrealized_pnl = (
+            (final_price - entry_price) * quantity - entry_fee
+        )
+
     peak = equity.cummax()
     drawdown = equity / peak - 1.0
-
     completed = [trade for trade in trades if trade["side"] == "SELL"]
     wins = sum(1 for trade in completed if trade["net_pnl"] > 0)
 
@@ -87,9 +104,13 @@ def run_backtest(
         "final_equity": final_equity,
         "net_return_pct": (final_equity / initial_balance - 1) * 100,
         "max_drawdown_pct": float(drawdown.min() * 100),
+        "realized_pnl": float(realized_pnl),
+        "unrealized_pnl": float(unrealized_pnl),
         "completed_trades": len(completed),
         "winning_trades": wins,
-        "win_rate_pct": (wins / len(completed) * 100) if completed else 0.0,
+        "win_rate_pct": wins / len(completed) * 100 if completed else 0.0,
         "open_position": quantity > 0,
+        "open_quantity": float(quantity),
         "trades": trades,
+        "equity_curve": equity.tolist(),
     }
