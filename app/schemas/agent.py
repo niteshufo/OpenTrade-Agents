@@ -14,3 +14,10 @@ class AgentResponse(BaseModel):
     name: str
     description: str
     strategy_type: str
+
+
+
+class AgentUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=80)
+    description: str | None = Field(default=None, max_length=500)
+    strategy_type: str | None = Field(default=None, min_length=2, max_length=50)

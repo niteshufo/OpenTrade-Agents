@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.agent import Agent
-from app.schemas.agent import AgentCreate, AgentResponse
+from app.schemas.agent import AgentCreate, AgentResponse, AgentUpdate
 
 router = APIRouter(prefix="/api/v1/agents", tags=["Agents"])
 
@@ -76,3 +76,58 @@ def get_agent(
         )
 
     return agent
+
+
+
+@router.patch("/{agent_id}", response_model=AgentResponse)
+def update_agent(
+    agent_id: int,
+    payload: AgentUpdate,
+    db: Session = Depends(get_db),
+):
+    agent = db.get(Agent, agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if not updates:
+        raise HTTPException(status_code=422, detail="No fields provided to update")
+
+    if "name" in updates:
+        name = updates["name"].strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="Agent name cannot be blank")
+
+        existing = db.scalar(
+            select(Agent).where(Agent.name == name, Agent.id != agent_id)
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="An agent with this name already exists",
+            )
+        updates["name"] = name
+
+    for field, value in updates.items():
+        setattr(agent, field, value)
+
+    try:
+        db.commit()
+        db.refresh(agent)
+    except Exception:
+        db.rollback()
+        raise
+
+    return agent
+
+
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agent(agent_id: int, db: Session = Depends(get_db)):
+    agent = db.get(Agent, agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    db.delete(agent)
+    db.commit()
+    return None

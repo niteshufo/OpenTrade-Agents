@@ -73,3 +73,56 @@ def test_get_missing_agent_returns_404(client):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Agent not found"
+
+
+
+def test_update_agent(client):
+    response = client.post(
+        "/api/v1/agents/register",
+        json={
+            "name": "MomentumBot",
+            "description": "Original description",
+            "strategy_type": "momentum",
+        },
+    )
+    agent_id = response.json()["id"]
+
+    response = client.patch(
+        f"/api/v1/agents/{agent_id}",
+        json={"description": "Updated description"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] == "Updated description"
+    assert response.json()["name"] == "MomentumBot"
+
+
+def test_update_missing_agent_returns_404(client):
+    response = client.patch(
+        "/api/v1/agents/9999",
+        json={"description": "Updated description"},
+    )
+    assert response.status_code == 404
+
+
+def test_delete_agent(client):
+    response = client.post(
+        "/api/v1/agents/register",
+        json={
+            "name": "DeleteBot",
+            "description": "Bot to delete",
+            "strategy_type": "momentum",
+        },
+    )
+    agent_id = response.json()["id"]
+
+    response = client.delete(f"/api/v1/agents/{agent_id}")
+    assert response.status_code == 204
+
+    response = client.get(f"/api/v1/agents/{agent_id}")
+    assert response.status_code == 404
+
+
+def test_delete_missing_agent_returns_404(client):
+    response = client.delete("/api/v1/agents/9999")
+    assert response.status_code == 404
