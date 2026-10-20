@@ -50,3 +50,12 @@ def register_agent(
         raise
 
     return agent
+
+
+
+@router.get("/", response_model=list[AgentResponse])
+def list_agents(db: Session = Depends(get_db)):
+    agents = db.scalars(
+        select(Agent).order_by(Agent.id)
+    ).all()
+    return agents

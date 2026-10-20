@@ -1,11 +1,6 @@
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-client = TestClient(app)
 
 
-def test_register_agent():
+def test_register_agent(client):
     response = client.post(
         "/api/v1/agents/register",
         json={
@@ -19,7 +14,7 @@ def test_register_agent():
     assert response.json()["name"] == "test-momentum-agent"
 
 
-def test_duplicate_agent_rejected():
+def test_duplicate_agent_rejected(client):
     payload = {
         "name": "duplicate-test-agent",
         "description": "Duplicate test",
@@ -33,7 +28,7 @@ def test_duplicate_agent_rejected():
     assert second.status_code == 409
 
 
-def test_invalid_agent_rejected():
+def test_invalid_agent_rejected(client):
     response = client.post(
         "/api/v1/agents/register",
         json={
@@ -44,3 +39,11 @@ def test_invalid_agent_rejected():
     )
 
     assert response.status_code == 422
+
+
+
+def test_list_agents(client):
+    response = client.get("/api/v1/agents/")
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
